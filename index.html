@@ -32,11 +32,7 @@
     background: #E5E5EA; color: #1D1D1F;
   }
   .btn:hover { background: #D1D1D6; }
-
-  /* Style toggle */
-  .toggle-row {
-    display: flex; gap: 10px; margin-bottom: 20px;
-  }
+  .toggle-row { display: flex; gap: 10px; margin-bottom: 20px; }
   .style-btn {
     font-size: 13px; font-weight: 600;
     padding: 8px 18px; border: 2px solid #D1D1D6;
@@ -44,10 +40,7 @@
     background: white; color: #555;
     transition: all 0.15s;
   }
-  .style-btn.active {
-    background: #1D1D1F; color: white; border-color: #1D1D1F;
-  }
-
+  .style-btn.active { background: #1D1D1F; color: white; border-color: #1D1D1F; }
   #result-wrap {
     background: white; border-radius: 16px;
     border: 1px solid #E0E0E0; padding: 24px;
@@ -57,10 +50,7 @@
   }
   #placeholder { color: #AEAEB2; font-size: 15px; text-align: center; }
   #result-img { max-width: 100%; display: none; border-radius: 8px; }
-  .hint {
-    margin-top: 14px; font-size: 13px;
-    color: #007AFF; font-weight: 500; display: none;
-  }
+  .hint { margin-top: 14px; font-size: 13px; color: #007AFF; font-weight: 500; display: none; }
   canvas { display: none; }
 </style>
 </head>
@@ -74,10 +64,9 @@
   <button class="btn" onclick="clearAll()">Clear</button>
 </div>
 
-<!-- Style toggle -->
 <div class="toggle-row">
   <button class="style-btn active" id="btn-below" onclick="setStyle('below')">A  Letter Below</button>
-  <button class="style-btn" id="btn-circle" onclick="setStyle('circle')">🔵 Letter in Circle</button>
+  <button class="style-btn" id="btn-circle" onclick="setStyle('circle')">⚫ Letter in Circle</button>
 </div>
 
 <div id="result-wrap">
@@ -147,15 +136,12 @@ async function render() {
     return;
   }
 
-  const SIZE     = 140;
-  const GAP      = 12;
-  const MARGIN   = 24;
-  const LABEL_H  = currentStyle === 'below' ? 60 : 0;
-  const FONT_SIZE = 40;
-
-  // Circle badge settings
-  const CIRCLE_R    = 22;   // radius
-  const CIRCLE_FONT = 22;   // font size inside circle
+  const SIZE       = 140;
+  const GAP        = 12;
+  const MARGIN     = 24;
+  const CIRCLE_R   = 24;   // circle radius
+  const CIRCLE_FONT = 22;
+  const LABEL_H    = currentStyle === 'below' ? 60 : (CIRCLE_R * 2 + 10); // space below sign
 
   const cellW = SIZE + GAP;
   const W = letters.length * cellW - GAP + MARGIN * 2;
@@ -180,25 +166,23 @@ async function render() {
     }
 
     if (currentStyle === 'below') {
-      // Letter below sign
+      // Plain letter below sign — no overlap
       ctx.fillStyle    = '#1D1D1F';
-      ctx.font         = `bold ${FONT_SIZE}px Helvetica, Arial, sans-serif`;
+      ctx.font         = `bold 40px Helvetica, Arial, sans-serif`;
       ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(letter, x + SIZE / 2, y + SIZE + LABEL_H / 2);
 
     } else {
-      // Dark circle badge — bottom right of sign (like reference chart)
-      const cx = x + SIZE - CIRCLE_R - 4;
-      const cy = y + SIZE - CIRCLE_R - 4;
+      // Dark circle BELOW the sign — centered, no overlap
+      const cx = x + SIZE / 2;
+      const cy = y + SIZE + CIRCLE_R + 6;  // 6px gap below sign
 
-      // Draw dark circle
       ctx.beginPath();
       ctx.arc(cx, cy, CIRCLE_R, 0, Math.PI * 2);
       ctx.fillStyle = '#1D1D1F';
       ctx.fill();
 
-      // White letter inside circle
       ctx.fillStyle    = 'white';
       ctx.font         = `bold ${CIRCLE_FONT}px Helvetica, Arial, sans-serif`;
       ctx.textAlign    = 'center';
