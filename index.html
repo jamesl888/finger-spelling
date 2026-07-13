@@ -32,7 +32,7 @@
     background: #E5E5EA; color: #1D1D1F;
   }
   .btn:hover { background: #D1D1D6; }
-  .toggle-row { display: flex; gap: 10px; margin-bottom: 20px; }
+  .toggle-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
   .style-btn {
     font-size: 13px; font-weight: 600;
     padding: 8px 18px; border: 2px solid #D1D1D6;
@@ -65,8 +65,9 @@
 </div>
 
 <div class="toggle-row">
-  <button class="style-btn active" id="btn-below" onclick="setStyle('below')">A  Letter Below</button>
-  <button class="style-btn" id="btn-circle" onclick="setStyle('circle')">⚫ Letter in Circle</button>
+  <button class="style-btn active" id="btn-below"  onclick="setStyle('below')">A &nbsp;Letter Below</button>
+  <button class="style-btn"        id="btn-circle" onclick="setStyle('circle')">⚫ Letter in Circle</button>
+  <button class="style-btn"        id="btn-skin"   onclick="setStyle('skin')">✋ Skin Tone</button>
 </div>
 
 <div id="result-wrap">
@@ -76,6 +77,7 @@
 </div>
 
 <canvas id="hiddenCanvas"></canvas>
+<canvas id="tmpCanvas"></canvas>
 
 <script>
 const SIGNS = {
@@ -111,8 +113,9 @@ let currentStyle = 'below';
 
 function setStyle(s) {
   currentStyle = s;
-  document.getElementById('btn-below').classList.toggle('active', s === 'below');
-  document.getElementById('btn-circle').classList.toggle('active', s === 'circle');
+  ['below','circle','skin'].forEach(id =>
+    document.getElementById('btn-' + id).classList.toggle('active', id === s)
+  );
   render();
 }
 
@@ -122,6 +125,23 @@ input.addEventListener('input', render);
 const loadImg = src => new Promise(res => {
   const i = new Image(); i.onload = () => res(i); i.src = src;
 });
+
+// Colorize a B&W sign with skin tone using multiply blend
+function drawSkinTone(ctx, img, x, y, size) {
+  const SKIN = '#E8B49A';  // warm natural skin tone
+
+  // 1. Draw skin tone background fill
+  ctx.fillStyle = SKIN;
+  ctx.fillRect(x, y, size, size);
+
+  // 2. Draw original image on top with multiply blend
+  //    multiply: white areas become skin tone, dark lines stay dark
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.drawImage(img, x, y, size, size);
+
+  // 3. Reset blend mode
+  ctx.globalCompositeOperation = 'source-over';
+}
 
 async function render() {
   const letters = input.value.toUpperCase().replace(/[^A-Z]/g, '').split('').filter(Boolean);
@@ -139,9 +159,9 @@ async function render() {
   const SIZE       = 140;
   const GAP        = 12;
   const MARGIN     = 24;
-  const CIRCLE_R   = 24;   // circle radius
+  const CIRCLE_R   = 24;
   const CIRCLE_FONT = 22;
-  const LABEL_H    = currentStyle === 'below' ? 60 : (CIRCLE_R * 2 + 10); // space below sign
+  const LABEL_H    = currentStyle === 'below' ? 60 : (CIRCLE_R * 2 + 10);
 
   const cellW = SIZE + GAP;
   const W = letters.length * cellW - GAP + MARGIN * 2;
@@ -159,14 +179,26 @@ async function render() {
     const letter = letters[i];
     const x = MARGIN + i * cellW;
     const y = MARGIN;
+    const img = SIGNS[letter] ? await loadImg(SIGNS[letter]) : null;
 
-    if (SIGNS[letter]) {
-      const img = await loadImg(SIGNS[letter]);
-      ctx.drawImage(img, x, y, SIZE, SIZE);
-    }
+    if (currentStyle === 'skin') {
+      if (img) drawSkinTone(ctx, img, x, y, SIZE);
 
-    if (currentStyle === 'below') {
-      // Plain letter below sign — no overlap
+      // Circle badge below for skin tone style
+      const cx = x + SIZE / 2;
+      const cy = y + SIZE + CIRCLE_R + 6;
+      ctx.beginPath();
+      ctx.arc(cx, cy, CIRCLE_R, 0, Math.PI * 2);
+      ctx.fillStyle = '#1D1D1F';
+      ctx.fill();
+      ctx.fillStyle    = 'white';
+      ctx.font         = `bold ${CIRCLE_FONT}px Helvetica, Arial, sans-serif`;
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(letter, cx, cy + 1);
+
+    } else if (currentStyle === 'below') {
+      if (img) ctx.drawImage(img, x, y, SIZE, SIZE);
       ctx.fillStyle    = '#1D1D1F';
       ctx.font         = `bold 40px Helvetica, Arial, sans-serif`;
       ctx.textAlign    = 'center';
@@ -174,15 +206,14 @@ async function render() {
       ctx.fillText(letter, x + SIZE / 2, y + SIZE + LABEL_H / 2);
 
     } else {
-      // Dark circle BELOW the sign — centered, no overlap
+      // circle style
+      if (img) ctx.drawImage(img, x, y, SIZE, SIZE);
       const cx = x + SIZE / 2;
-      const cy = y + SIZE + CIRCLE_R + 6;  // 6px gap below sign
-
+      const cy = y + SIZE + CIRCLE_R + 6;
       ctx.beginPath();
       ctx.arc(cx, cy, CIRCLE_R, 0, Math.PI * 2);
       ctx.fillStyle = '#1D1D1F';
       ctx.fill();
-
       ctx.fillStyle    = 'white';
       ctx.font         = `bold ${CIRCLE_FONT}px Helvetica, Arial, sans-serif`;
       ctx.textAlign    = 'center';
