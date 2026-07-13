@@ -25,10 +25,22 @@
   .toggle-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
   .style-btn { font-size: 13px; font-weight: 600; padding: 8px 18px; border: 2px solid #D1D1D6; border-radius: 20px; cursor: pointer; background: white; color: #555; transition: all 0.15s; }
   .style-btn.active { background: #1D1D1F; color: white; border-color: #1D1D1F; }
-  #result-wrap { background: white; border-radius: 16px; border: 1px solid #E0E0E0; padding: 24px; width: 100%; max-width: 960px; min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  #placeholder { color: #AEAEB2; font-size: 15px; text-align: center; }
+  #result-wrap {
+    border-radius: 16px; border: 1px solid #E0E0E0; padding: 24px;
+    width: 100%; max-width: 960px; min-height: 200px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    /* Checkerboard pattern to show transparency */
+    background-color: #fff;
+    background-image: linear-gradient(45deg, #ddd 25%, transparent 25%),
+      linear-gradient(-45deg, #ddd 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #ddd 75%),
+      linear-gradient(-45deg, transparent 75%, #ddd 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  }
+  #placeholder { color: #666; font-size: 15px; text-align: center; background: white; padding: 8px 16px; border-radius: 8px; }
   #result-img { max-width: 100%; display: none; border-radius: 8px; }
-  .hint { margin-top: 14px; font-size: 13px; color: #007AFF; font-weight: 500; display: none; }
+  .hint { margin-top: 14px; font-size: 13px; color: #007AFF; font-weight: 500; display: none; background: white; padding: 6px 12px; border-radius: 8px; }
   canvas { display: none; }
 </style>
 </head>
@@ -40,9 +52,10 @@
   <button class="btn" onclick="clearAll()">Clear</button>
 </div>
 <div class="toggle-row">
-  <button class="style-btn active" id="btn-below"  onclick="setStyle('below')">A &nbsp;Letter Below</button>
-  <button class="style-btn"        id="btn-circle" onclick="setStyle('circle')">⚫ Letter in Circle</button>
-  <button class="style-btn"        id="btn-skin"   onclick="setStyle('skin')">✋ Skin Tone</button>
+  <button class="style-btn active" id="btn-below"       onclick="setStyle('below')">A &nbsp;Letter Below</button>
+  <button class="style-btn"        id="btn-circle"      onclick="setStyle('circle')">⚫ Letter in Circle</button>
+  <button class="style-btn"        id="btn-skin"        onclick="setStyle('skin')">✋ Skin Tone</button>
+  <button class="style-btn"        id="btn-transparent" onclick="setStyle('transparent')">✳️ No Background</button>
 </div>
 <div id="result-wrap">
   <div id="placeholder">Start typing to see hand signs...</div>
@@ -83,7 +96,7 @@ const SIGNS = {
 let currentStyle = 'below';
 function setStyle(s) {
   currentStyle = s;
-  ['below','circle','skin'].forEach(id =>
+  ['below','circle','skin','transparent'].forEach(id =>
     document.getElementById('btn-' + id).classList.toggle('active', id === s));
   render();
 }
@@ -94,62 +107,55 @@ const loadImg = src => new Promise(res => { const i = new Image(); i.onload = ()
 
 const SKIN_R = 232, SKIN_G = 180, SKIN_B = 154;
 
-function applySkinTone(img, size) {
+// Flood fill from edges to find background pixels, then process
+function processImage(img, size, mode) {
   const tmp = document.createElement('canvas');
   tmp.width = size; tmp.height = size;
   const ctx = tmp.getContext('2d');
   ctx.drawImage(img, 0, 0, size, size);
-
   const imageData = ctx.getImageData(0, 0, size, size);
   const data = imageData.data;
   const w = size, h = size;
 
-  // Step 1: Flood fill from edges to find TRUE background pixels
+  // Flood fill from edges to mark true background
   const isBg = new Uint8Array(w * h);
   const stack = [];
-
   const tryPush = (x, y) => {
     if (x < 0 || x >= w || y < 0 || y >= h) return;
     const idx = y * w + x;
     if (isBg[idx]) return;
     const pi = idx * 4;
-    // Only flood through light pixels (background or near-white)
     if ((data[pi] + data[pi+1] + data[pi+2]) / 3 > 200) {
-      isBg[idx] = 1;
-      stack.push(x, y);
+      isBg[idx] = 1; stack.push(x, y);
     }
   };
-
-  // Seed from all 4 edges
   for (let x = 0; x < w; x++) { tryPush(x, 0); tryPush(x, h-1); }
   for (let y = 0; y < h; y++) { tryPush(0, y); tryPush(w-1, y); }
-
-  // DFS flood fill
   while (stack.length > 0) {
     const y = stack.pop(), x = stack.pop();
-    tryPush(x+1, y); tryPush(x-1, y);
-    tryPush(x, y+1); tryPush(x, y-1);
+    tryPush(x+1,y); tryPush(x-1,y); tryPush(x,y+1); tryPush(x,y-1);
   }
 
-  // Step 2: Colour non-background pixels with skin tone
   for (let i = 0; i < w * h; i++) {
     const pi = i * 4;
     if (isBg[i]) {
-      // True background → pure white
-      data[pi]=255; data[pi+1]=255; data[pi+2]=255;
-    } else {
+      if (mode === 'transparent') {
+        // True background → fully transparent
+        data[pi]=255; data[pi+1]=255; data[pi+2]=255; data[pi+3]=0;
+      } else {
+        // White background
+        data[pi]=255; data[pi+1]=255; data[pi+2]=255; data[pi+3]=255;
+      }
+    } else if (mode === 'skin') {
       const brightness = (data[pi] + data[pi+1] + data[pi+2]) / 3;
       if (brightness > 80) {
-        // Hand interior (white/grey inside outline) → skin tone
         const t = brightness / 255;
         data[pi]   = Math.round(SKIN_R * t);
         data[pi+1] = Math.round(SKIN_G * t);
         data[pi+2] = Math.round(SKIN_B * t);
       }
-      // Dark pixels (outline lines) → stay dark, no change
     }
   }
-
   ctx.putImageData(imageData, 0, 0);
   return tmp;
 }
@@ -160,28 +166,42 @@ async function render() {
   const resultImg   = document.getElementById('result-img');
   const hint        = document.getElementById('hint');
   if (letters.length === 0) {
-    placeholder.style.display = 'block';
-    resultImg.style.display = 'none';
-    hint.style.display = 'none';
+    placeholder.style.display='block'; resultImg.style.display='none'; hint.style.display='none';
     return;
   }
+
   const SIZE=140, GAP=12, MARGIN=24, CR=24, CF=22;
   const LABEL_H = currentStyle === 'below' ? 60 : CR*2+10;
   const cellW = SIZE+GAP;
   const W = letters.length*cellW - GAP + MARGIN*2;
   const H = SIZE + LABEL_H + MARGIN*2;
+
   const cv = document.getElementById('hiddenCanvas');
   cv.width=W; cv.height=H;
   const ctx = cv.getContext('2d');
-  ctx.fillStyle='white'; ctx.fillRect(0,0,W,H);
+  ctx.clearRect(0, 0, W, H);  // transparent base
+
+  if (currentStyle !== 'transparent') {
+    ctx.fillStyle='white'; ctx.fillRect(0,0,W,H);
+  }
 
   for (let i=0; i<letters.length; i++) {
     const letter = letters[i];
     const x = MARGIN + i*cellW, y = MARGIN;
     const img = SIGNS[letter] ? await loadImg(SIGNS[letter]) : null;
 
-    if (currentStyle === 'skin') {
-      if (img) ctx.drawImage(applySkinTone(img, SIZE), x, y, SIZE, SIZE);
+    if (currentStyle === 'transparent') {
+      if (img) ctx.drawImage(processImage(img, SIZE, 'transparent'), x, y, SIZE, SIZE);
+      // Circle badge below
+      const cx=x+SIZE/2, cy=y+SIZE+CR+6;
+      ctx.beginPath(); ctx.arc(cx,cy,CR,0,Math.PI*2);
+      ctx.fillStyle='#1D1D1F'; ctx.fill();
+      ctx.fillStyle='white'; ctx.font=`bold ${CF}px Helvetica,Arial,sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(letter, cx, cy+1);
+
+    } else if (currentStyle === 'skin') {
+      if (img) ctx.drawImage(processImage(img, SIZE, 'skin'), x, y, SIZE, SIZE);
       const cx=x+SIZE/2, cy=y+SIZE+CR+6;
       ctx.beginPath(); ctx.arc(cx,cy,CR,0,Math.PI*2);
       ctx.fillStyle='#1D1D1F'; ctx.fill();
@@ -205,15 +225,14 @@ async function render() {
       ctx.fillText(letter, cx, cy+1);
     }
   }
+
   resultImg.src = cv.toDataURL('image/png');
   resultImg.style.display='block';
   placeholder.style.display='none';
   hint.style.display='block';
 }
 
-function clearAll() {
-  input.value=''; render(); input.focus();
-}
+function clearAll() { input.value=''; render(); input.focus(); }
 </script>
 </body>
 </html>
